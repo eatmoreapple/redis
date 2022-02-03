@@ -14,10 +14,7 @@ import (
 )
 
 func main() {
-	client, err := redis.NewClient("tcp", "localhost:6379", 2)
-	if err != nil {
-		panic(err)
-	}
+	client := redis.NewClient()
 	conn, err := client.Conn()
 	if err != nil {
 		panic(err)

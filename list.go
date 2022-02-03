@@ -1,18 +1,5 @@
 package redis
 
-type (
-	LInsertOp string
-	LOrderOp  string
-)
-
-const (
-	Before LInsertOp = "BEFORE"
-	After  LInsertOp = "AFTER"
-
-	ASC  LOrderOp = "ASC"
-	DESC LOrderOp = "DESC"
-)
-
 func (c *Conn) LPush(key string, value ...interface{}) (int64, error) {
 	result := &IntResult{}
 	args := []interface{}{"LPUSH", key}
@@ -79,16 +66,16 @@ func (c *Conn) LTrim(key string, start, end int64) (bool, error) {
 
 func (c *Conn) LInsert(key string, op LInsertOp, pivot, value interface{}) (int64, error) {
 	result := &IntResult{}
-	err := c.Send(result, "LINSERT", key, op, pivot, value)
+	err := c.Send(result, "LINSERT", key, op.String(), pivot, value)
 	return result.Int64(), err
 }
 
 func (c *Conn) LInsertBefore(key string, pivot, value interface{}) (int64, error) {
-	return c.LInsert(key, Before, pivot, value)
+	return c.LInsert(key, BEFORE, pivot, value)
 }
 
 func (c *Conn) LInsertAfter(key string, pivot, value interface{}) (int64, error) {
-	return c.LInsert(key, After, pivot, value)
+	return c.LInsert(key, AFTER, pivot, value)
 }
 
 func (c *Conn) RPopLPush(key string, dest string) (string, error) {
@@ -111,7 +98,7 @@ func (c *Conn) SortAlpha(key string) ([]string, error) {
 
 func (c *Conn) SortOrder(key string, order LOrderOp) ([]string, error) {
 	result := &StringArrayResult{}
-	err := c.Send(result, "SORT", key, order)
+	err := c.Send(result, "SORT", key, order.String())
 	return result.Strings(), err
 }
 
