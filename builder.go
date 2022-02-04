@@ -77,7 +77,7 @@ func (w *builder) writeArg(v interface{}) error {
 	case int32:
 		return w.writeInt(int64(t))
 	case int64:
-		return w.writeInt(int64(t))
+		return w.writeInt(t)
 	case int:
 		return w.writeInt(int64(t))
 	case uint8:

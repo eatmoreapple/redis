@@ -41,11 +41,9 @@ func (p *Client) Get() (*Conn, error) {
 	if !p.hasFreeConns() {
 		return p.newConn()
 	}
-	defer func() {
-		p.lock.Lock()
-		p.freeNums--
-		p.lock.Unlock()
-	}()
+	p.lock.Lock()
+	p.freeNums--
+	p.lock.Unlock()
 	return <-p.conns, nil
 }
 

@@ -3,22 +3,25 @@ package redis
 import (
 	"bufio"
 	"net"
+	"sync"
 	"time"
 )
 
 type Conn struct {
 	conn        net.Conn
 	pool        *Client
+	lock        sync.Mutex
 	initialized bool
 	createdAt   time.Time
 }
 
 func (c *Conn) init(options *Options) error {
-	c.createdAt = time.Now()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.initialized {
 		return nil
 	}
-
+	c.createdAt = time.Now()
 	if options.Password != "" {
 		if _, err := c.Auth(options.Password); err != nil {
 			return err
