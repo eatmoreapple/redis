@@ -18,8 +18,12 @@ func NewClientWithOptions(options *Options) *Client {
 	}
 }
 
-func NewClient() *Client {
-	return NewClientWithOptions(&Options{})
+func NewClient(opts ...*Options) *Client {
+	opt := &Options{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	return NewClientWithOptions(opt)
 }
 
 type Client struct {
