@@ -11,17 +11,22 @@ package main
 import (
 	"fmt"
 	"github.com/eatmoreapple/redis"
+	"log"
 )
 
 func main() {
-	client := redis.NewClient()
-	conn, err := client.Conn()
+	client, err := redis.Dial(":@tcp(localhost:6379)/0")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+	}
+	conn, err := client.Get()
+	if err != nil {
+		log.Fatal(err)
 	}
 	defer conn.Release()
 	fmt.Println(conn.Set("foo", "bar")) // true <nil>
 	fmt.Println(conn.Get("foo"))        // bar <nil>
 }
+
 ```
 
