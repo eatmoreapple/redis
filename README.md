@@ -19,6 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer client.Close()
 	conn, err := client.Get()
 	if err != nil {
 		log.Fatal(err)
