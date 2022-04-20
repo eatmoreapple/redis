@@ -1,25 +1,49 @@
 package redis
 
-import "time"
+import (
+	"errors"
+	"regexp"
+	"strconv"
+	"time"
+)
+
+var dataSourceRegx = regexp.MustCompile(`:(?P<password>.*?)@(?P<network>.*)\((?P<address>.*):(?P<port>\d+)\)/(?P<db>\d+)`)
 
 type Options struct {
-	NetWork     string
-	Addr        string
-	Password    string
-	DB          int
-	MaxLifetime time.Duration
-	MaxOpenNums int
-	WaitTimeout time.Duration
+	Password        string
+	NetWork         string
+	Address         string
+	Port            int
+	DB              int
+	MaxOpenNums     int
+	ConnMaxLifetime time.Duration
 }
 
-func (o *Options) init() {
-	if o.NetWork == "" {
-		o.NetWork = "tcp"
+func (o Options) address() string {
+	return o.Address + ":" + strconv.Itoa(o.Port)
+}
+
+func NewOptionsWithDataSource(dataSource string) (*Options, error) {
+	subMatch := dataSourceRegx.FindStringSubmatch(dataSource)
+	if len(subMatch) != 6 {
+		return nil, errors.New("redis: invalid data source")
 	}
-	if o.Addr == "" {
-		o.Addr = "localhost:6379"
+	port, err := strconv.Atoi(subMatch[4])
+	if err != nil {
+		return nil, errors.New("redis: invalid data source")
 	}
-	if o.MaxOpenNums == 0 {
-		o.MaxOpenNums = 1
+	if subMatch[5] == "" {
+		subMatch[5] = "0"
 	}
+	db, err := strconv.Atoi(subMatch[5])
+	if err != nil {
+		return nil, errors.New("redis: invalid data source")
+	}
+	return &Options{
+		Password: subMatch[1],
+		NetWork:  subMatch[2],
+		Address:  subMatch[3],
+		Port:     port,
+		DB:       db,
+	}, nil
 }

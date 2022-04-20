@@ -39,10 +39,10 @@ func (c *Conn) init(options *Options) error {
 }
 
 func (c *Conn) isExpired() bool {
-	if c.pool.options.MaxLifetime == 0 {
+	if c.pool.options.ConnMaxLifetime == 0 {
 		return false
 	}
-	return time.Now().Sub(c.createdAt) > c.pool.options.MaxLifetime
+	return time.Now().Sub(c.createdAt) > c.pool.options.ConnMaxLifetime
 }
 
 func (c *Conn) Close() error {

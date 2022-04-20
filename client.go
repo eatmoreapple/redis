@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -10,70 +9,56 @@ import (
 
 var ErrPoolClosed = errors.New("redis: get on closed pool")
 
-func NewClientWithOptions(options *Options) *Client {
-	options.init()
-	return &Client{
-		options: options,
-		conns:   make(chan *Conn, options.MaxOpenNums),
+func Dial(dataSource string) (*Client, error) {
+	options, err := NewOptionsWithDataSource(dataSource)
+	if err != nil {
+		return nil, err
 	}
-}
-
-func NewClient(opts ...*Options) *Client {
-	opt := &Options{}
-	if len(opts) > 0 {
-		opt = opts[0]
-	}
-	return NewClientWithOptions(opt)
+	return &Client{options: options}, nil
 }
 
 type Client struct {
 	closed   bool
 	openNums int
 	freeNums int
-	conns    chan *Conn
+	connList chan *Conn
 	lock     sync.RWMutex
 	options  *Options
 }
 
+// Get a connection from the pool.
+// If no connections are available, it will create a new one.
+// If maxOpen is reached, it will wait for an available connection.
 func (p *Client) Get() (*Conn, error) {
-	p.lock.RLock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	if p.closed {
-		p.lock.RLocker()
 		return nil, ErrPoolClosed
 	}
-	p.lock.RUnlock()
-	if !p.hasFreeConns() {
-		return p.newConn()
+	// init pool if needed
+	if p.connList == nil {
+		p.connList = make(chan *Conn, p.options.MaxOpenNums)
 	}
-	p.lock.Lock()
-	p.freeNums--
-	p.lock.Unlock()
-	return <-p.conns, nil
+	// if no connection limit or connection limit not reached, create a new connection
+	if p.openNums == 0 || p.openNums < p.options.MaxOpenNums {
+		conn, err := p.newConn()
+		if err != nil {
+			return nil, err
+		}
+		// increase openNums
+		p.openNums++
+		return conn, nil
+	} else {
+		// get a connection from the pool
+		conn := <-p.connList
+		p.freeNums--
+		return conn, nil
+	}
 }
 
 func (p *Client) newConn() (*Conn, error) {
-	p.lock.Lock()
-	if p.openNums >= p.options.MaxOpenNums {
-		p.lock.Unlock()
-		if p.options.WaitTimeout > 0 {
-			ctx, cancel := context.WithTimeout(context.Background(), p.options.WaitTimeout)
-			defer cancel()
-			select {
-			case conn := <-p.conns:
-				return conn, nil
-			case <-ctx.Done():
-				return p.dailNewCoon()
-			}
-		} else {
-			return <-p.conns, nil
-		}
-	}
-	p.lock.Unlock()
-	return p.dailNewCoon()
-}
-
-func (p *Client) dailNewCoon() (*Conn, error) {
-	c, err := net.Dial(p.options.NetWork, p.options.Addr)
+	// create a new connection
+	c, err := net.Dial(p.options.NetWork, p.options.address())
 	if err != nil {
 		return nil, err
 	}
@@ -81,16 +66,7 @@ func (p *Client) dailNewCoon() (*Conn, error) {
 	if err := coon.init(p.options); err != nil {
 		return nil, err
 	}
-	p.lock.Lock()
-	if p.openNums < p.options.MaxOpenNums {
-		p.openNums++
-	}
-	p.lock.Unlock()
 	return coon, nil
-}
-
-func (p *Client) hasFreeConns() bool {
-	return p.freeNums > 0
 }
 
 func (p *Client) Close() error {
@@ -99,10 +75,10 @@ func (p *Client) Close() error {
 	if p.closed {
 		return nil
 	}
-	close(p.conns)
+	close(p.connList)
 	p.closed = true
 	var errorList []error
-	for c := range p.conns {
+	for c := range p.connList {
 		if err := c.Close(); err != nil {
 			errorList = append(errorList, err)
 		}
@@ -110,17 +86,25 @@ func (p *Client) Close() error {
 	return fmt.Errorf("%v", errorList)
 }
 
-func (p *Client) isFull() bool {
-	return len(p.conns) >= p.options.MaxOpenNums
-}
-
 func (p *Client) release(c *Conn) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if p.closed || c.isExpired() || p.isFull() {
+	// if pool is closed or no open connection limit, close the connection
+	if p.closed || p.options.MaxOpenNums <= 0 {
 		return c.Close()
 	}
-	p.conns <- c
-	p.freeNums++
-	return nil
+	// if current connection is expired, close it
+	if c.isExpired() {
+		p.openNums--
+		return c.Close()
+	} else {
+		// otherwise, put it back to the pool
+		p.connList <- c
+		p.freeNums++
+		return nil
+	}
+}
+
+func (p *Client) SetMaxOpenNums(i int) {
+	p.options.MaxOpenNums = i
 }
