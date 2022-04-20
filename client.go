@@ -83,7 +83,10 @@ func (p *Client) Close() error {
 			errorList = append(errorList, err)
 		}
 	}
-	return fmt.Errorf("%v", errorList)
+	if len(errorList) > 0 {
+		return fmt.Errorf("redis: close error: %v", errorList)
+	}
+	return nil
 }
 
 func (p *Client) release(c *Conn) error {
