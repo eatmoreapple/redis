@@ -97,7 +97,7 @@ func (w *builder) writeArg(v interface{}) error {
 	case bool:
 		return w.writeBool(t)
 	case encoding.BinaryMarshaler:
-		return w.writeBinaryMarshaler(t)
+		return w.writeBinaryMarshaller(t)
 	}
 	return errors.New("redis: can't marshal " + reflect.TypeOf(v).String())
 }
@@ -137,8 +137,8 @@ func (w *builder) writeBool(i bool) error {
 	return w.writeLine("0")
 }
 
-func (w *builder) writeBinaryMarshaler(Marshaler encoding.BinaryMarshaler) error {
-	data, err := Marshaler.MarshalBinary()
+func (w *builder) writeBinaryMarshaller(Marshaller encoding.BinaryMarshaler) error {
+	data, err := Marshaller.MarshalBinary()
 	if err != nil {
 		return err
 	}
