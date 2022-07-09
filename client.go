@@ -14,7 +14,9 @@ func Dial(dataSource string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{options: options}, nil
+	client := &Client{options: options}
+	client.init()
+	return client, nil
 }
 
 type Client struct {
@@ -24,6 +26,13 @@ type Client struct {
 	connList chan *Conn
 	lock     sync.RWMutex
 	options  *Options
+	pool     sync.Pool
+}
+
+func (p *Client) init() {
+	p.pool.New = func() interface{} {
+		return &builder{}
+	}
 }
 
 // Get a connection from the pool.

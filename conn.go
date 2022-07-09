@@ -65,7 +65,11 @@ func (c *Conn) Do(builder Builder, result Result, args ...interface{}) error {
 }
 
 func (c *Conn) Send(result Result, args ...interface{}) error {
-	bd := &builder{}
+	bd := c.pool.pool.Get().(*builder)
+	defer func() {
+		bd.bd.Reset()
+		c.pool.pool.Put(bd)
+	}()
 	return c.Do(bd, result, args...)
 }
 
@@ -178,5 +182,17 @@ func (c *Conn) Persist(key string) (bool, error) {
 func (c *Conn) Auth(password string) (bool, error) {
 	result := &BoolResult{}
 	err := c.Send(result, "AUTH", password)
+	return result.Bool(), err
+}
+
+func (c *Conn) DBSize() (int64, error) {
+	result := &IntResult{}
+	err := c.Send(result, "DBSIZE")
+	return result.Int64(), err
+}
+
+func (c *Conn) Rename(oldName, newName string) (bool, error) {
+	result := &BoolResult{}
+	err := c.Send(result, "RENAME", oldName, newName)
 	return result.Bool(), err
 }
