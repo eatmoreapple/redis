@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"errors"
 	"strconv"
 )
@@ -248,10 +249,169 @@ func (f *FloatResult) Parse(reader *Reader) error {
 		return err
 	}
 	return InvalidTypeError
-
 }
 
 // Float64 returns the float result.
 func (f *FloatResult) Float64() float64 {
 	return f.v
+}
+
+// SubscribeResult represents a subscribe result.
+type SubscribeResult struct {
+	ch  chan *SubscribeMessage
+	ctx context.Context
+}
+
+// Parse implements the Result interface.
+func (s *SubscribeResult) Parse(reader *Reader) error {
+	for {
+		line, isPrefix, err := reader.rd.ReadLine()
+		if err != nil {
+			return err
+		}
+		if isPrefix {
+			return PrefixError
+		}
+		prefix := line[0]
+		switch prefix {
+		case ErrorReply:
+			return NewError(errors.New(string(line[1:])))
+		case ArrayReply:
+			size, err := parseInt(line[1:])
+			if err != nil {
+				return err
+			}
+			if size != 3 {
+				return errors.New("invalid number of elements")
+			}
+			var msg SubscribeMessage
+			for i := 0; i < size; i++ {
+				p, err := reader.Parse()
+				if err != nil {
+					return err
+				}
+				switch i {
+				case 0:
+					msg.Kind = string(p)
+				case 1:
+					msg.Channel = string(p)
+				case 2:
+					msg.Message = p
+				}
+			}
+			s.ch <- &msg
+			if msg.IsUnsubscribe() {
+				return nil
+			}
+		default:
+			return InvalidTypeError
+		}
+	}
+}
+
+// PSubscribeResult represents a psubscribe result.
+type PSubscribeResult struct {
+	ch  chan *PSubscribeMessage
+	ctx context.Context
+}
+
+// Parse implements the Result interface.
+func (p *PSubscribeResult) Parse(reader *Reader) error {
+	for {
+		line, isPrefix, err := reader.rd.ReadLine()
+		if err != nil {
+			return err
+		}
+		if isPrefix {
+			return PrefixError
+		}
+		prefix := line[0]
+		switch prefix {
+		case ErrorReply:
+			return NewError(errors.New(string(line[1:])))
+		case ArrayReply:
+			size, err := parseInt(line[1:])
+			if err != nil {
+				return err
+			}
+
+			var msg PSubscribeMessage
+			for i := 0; i < size; i++ {
+				p, err := reader.Parse()
+				if err != nil {
+					return err
+				}
+				switch i {
+				case 0:
+					msg.Kind = string(p)
+				case 1:
+					msg.Pattern = string(p)
+				case 2:
+					if size == 3 {
+						msg.Message = p
+					} else {
+						msg.Channel = string(p)
+					}
+				case 3:
+					msg.Message = p
+				}
+			}
+			select {
+			case p.ch <- &msg:
+				continue
+			case <-p.ctx.Done():
+				return nil
+			}
+		}
+		return InvalidTypeError
+	}
+}
+
+type UnsubscribeResult struct {
+	msg *UnsubscribeMessage
+}
+
+func (u *UnsubscribeResult) Parse(reader *Reader) error {
+	line, isPrefix, err := reader.rd.ReadLine()
+	if err != nil {
+		return err
+	}
+	if isPrefix {
+		return PrefixError
+	}
+	prefix := line[0]
+	switch prefix {
+	case ErrorReply:
+		return NewError(errors.New(string(line[1:])))
+	case ArrayReply:
+		size, err := parseInt(line[1:])
+		if err != nil {
+			return err
+		}
+		if size != 3 {
+			return errors.New("invalid number of elements")
+		}
+		var msg UnsubscribeMessage
+		for i := 0; i < size; i++ {
+			p, err := reader.Parse()
+			if err != nil {
+				return err
+			}
+			switch i {
+			case 0:
+				msg.Kind = string(p)
+			case 1:
+				msg.Channel = string(p)
+			case 2:
+				count, err := parseInt(p)
+				if err != nil {
+					return err
+				}
+				msg.Count = int64(count)
+			}
+		}
+		u.msg = &msg
+		return nil
+	}
+	return InvalidTypeError
 }
