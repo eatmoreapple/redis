@@ -9,8 +9,11 @@ import (
 	"time"
 )
 
-func (c *Client) Set(ctx context.Context, key string, value any) *BoolResult {
+func (c *Client) Set(ctx context.Context, key string, value any, expireIn time.Duration) *BoolResult {
 	args := Args{"SET", key, value}
+	if seconds := int64(expireIn.Seconds()); seconds > 0 {
+		args = append(args, "EX", seconds)
+	}
 	var parser StringParser
 	err := c.Call(ctx, args, &parser)
 	parser.SetErr(err)
